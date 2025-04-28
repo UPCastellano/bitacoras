@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "name": "sistema-documentos-pdf",
+  "builds": [
+    { 
+      "src": "index.js", 
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { 
+      "src": "/api/(.*)", 
+      "dest": "index.js" 
+    },
+    { 
+      "src": "/uploads/(.*)", 
+      "dest": "/uploads/$1" 
+    },
+    {
+      "src": "/(.*\\.(js|css|json|png|jpg|svg))",
+      "dest": "/public/$1"
+    },
+    { 
+      "src": "/(.*)", 
+      "dest": "index.js" 
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
+} 
