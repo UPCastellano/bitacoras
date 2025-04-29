@@ -81,12 +81,14 @@ function initDataTable() {
                 data: null,
                 orderable: false,
                 render: function(data) {
+                    // Si el campo ruta_archivo es un enlace de Google Drive, úsalo
+                    const url = data.ruta_archivo.startsWith('http') ? data.ruta_archivo : `/uploads/${data.ruta_archivo}`;
                     return `
                         <div class="d-flex justify-content-center">
-                            <a href="${data.url_vista}" class="btn btn-primary btn-sm btn-action" target="_blank" title="Ver PDF">
+                            <a href="${url}" class="btn btn-primary btn-sm btn-action" target="_blank" title="Ver PDF">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            <a href="${data.url_vista}" class="btn btn-success btn-sm btn-action" download="${data.nombre}.pdf" title="Descargar">
+                            <a href="${url}" class="btn btn-success btn-sm btn-action" target="_blank" title="Descargar">
                                 <i class="fas fa-download"></i>
                             </a>
                             <button class="btn btn-danger btn-sm btn-action delete-btn" data-id="${data.id}" title="Eliminar">
@@ -224,32 +226,20 @@ function deleteDocumento(id) {
 
 // Abrir el PDF en una nueva pestaña con parámetros de búsqueda
 function openPdfInNewTab(documentId, searchTerm = null, pageNumber = null) {
-    // Buscar el documento
     const documento = allDocumentos.find(doc => doc.id == documentId);
     if (!documento) {
         showMessage('error', 'Documento no encontrado');
         return;
     }
-    
-    // Construir la URL base
-    let url = documento.url_vista;
-    
-    // Construir parámetros para la búsqueda
+
+    // Construir la URL del visor personalizado
+    let url = `/viewer.html?id=${documentId}`;
     const params = new URLSearchParams();
-    if (searchTerm) {
-        params.append('search', searchTerm);
-    }
-    if (pageNumber) {
-        params.append('page', pageNumber);
-    }
-    
-    // Agregar parámetros a la URL si existen
+    if (searchTerm) params.append('search', searchTerm);
+    if (pageNumber) params.append('page', pageNumber);
     const queryString = params.toString();
-    if (queryString) {
-        url = `${url}#${queryString}`;
-    }
-    
-    // Abrir en nueva pestaña
+    if (queryString) url += `&${queryString}`;
+
     window.open(url, '_blank');
 }
 

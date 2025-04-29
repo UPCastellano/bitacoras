@@ -6,6 +6,8 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 require('dotenv').config();
 const config = require('./config');
+const { uploadFileToDrive, oauth2Client, drive } = require('./googleDrive');
+const { google } = require('googleapis');
 
 // Crear la aplicación Express
 const app = express();
@@ -24,32 +26,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configurar multer para la subida de archivos
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Generar un nombre único para evitar sobrescrituras
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
-});
-
-// Filtro para aceptar solo archivos PDF
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'application/pdf') {
-    cb(null, true);
-  } else {
-    cb(new Error('Solo se permiten archivos PDF'), false);
-  }
-};
-
-const upload = multer({ 
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // Límite aumentado a 50MB
-});
+// Multer en memoria (no en disco)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // Conexión a la base de datos
 const pool = mysql.createPool({
@@ -62,57 +40,52 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+const FOLDER_ID = '18W0EM6vs0sJ1M0Qrpu6HC2r32ZQ8IIgV';
+
 // Rutas
 // 1. Subir archivo PDF
-app.post('/api/upload', (req, res) => {
-    // Usar multer como middleware de forma manual para manejar mejor los errores
-    upload.single('archivo')(req, res, async function(err) {
-        if (err) {
-            if (err instanceof multer.MulterError) {
-                if (err.code === 'LIMIT_FILE_SIZE') {
-                    return res.status(413).json({ 
-                        error: 'El archivo excede el tamaño máximo permitido de 50MB' 
-                    });
-                }
-                return res.status(400).json({ error: `Error en la subida: ${err.message}` });
-            }
-            return res.status(500).json({ error: `Error en el servidor: ${err.message}` });
-        }
-        
-        try {
-            if (!req.file) {
-                return res.status(400).json({ error: 'No se ha subido ningún archivo PDF' });
-            }
+app.post('/api/upload', upload.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se ha subido ningún archivo PDF' });
+    }
 
-            const { nombre, descripcion } = req.body;
-            const archivo = req.file;
+    // Subir a Google Drive
+    const url = await uploadFileToDrive(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      FOLDER_ID
+    );
 
-            // Guardar la información en la base de datos
-            const [result] = await pool.execute(
-                'INSERT INTO documentos (nombre, descripcion, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?)',
-                [
-                    nombre || archivo.originalname,
-                    descripcion || '',
-                    archivo.filename,
-                    archivo.mimetype,
-                    archivo.size
-                ]
-            );
+    const { nombre, descripcion } = req.body;
 
-            res.json({
-                success: true,
-                mensaje: 'Archivo subido correctamente',
-                documento: {
-                    id: result.insertId,
-                    nombre: nombre || archivo.originalname,
-                    ruta_archivo: archivo.filename
-                }
-            });
-        } catch (error) {
-            console.error('Error al subir el archivo:', error);
-            res.status(500).json({ error: 'Error al procesar la subida del archivo' });
-        }
+    // Guardar la información en la base de datos
+    const [result] = await pool.execute(
+      'INSERT INTO documentos (nombre, descripcion, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?)',
+      [
+        nombre || req.file.originalname,
+        descripcion || '',
+        url, // Guardamos el enlace de Google Drive
+        req.file.mimetype,
+        req.file.size
+      ]
+    );
+
+    res.json({
+      success: true,
+      mensaje: 'Archivo subido correctamente a Google Drive',
+      url,
+      documento: {
+        id: result.insertId,
+        nombre: nombre || req.file.originalname,
+        ruta_archivo: url
+      }
     });
+  } catch (error) {
+    console.error('Error al subir el archivo:', error);
+    res.status(500).json({ error: 'Error al procesar la subida del archivo a Google Drive' });
+  }
 });
 
 // 2. Obtener todos los documentos
@@ -123,7 +96,7 @@ app.get('/api/documentos', async (req, res) => {
     // Añadir URL completa para cada documento
     const documentos = rows.map(doc => ({
       ...doc,
-      url_vista: `/uploads/${doc.ruta_archivo}`
+      url_vista: doc.ruta_archivo.startsWith('http') ? doc.ruta_archivo : `/uploads/${doc.ruta_archivo}`
     }));
     
     res.json(documentos);
@@ -144,7 +117,7 @@ app.get('/api/documentos/:id', async (req, res) => {
     
     const documento = {
       ...rows[0],
-      url_vista: `/uploads/${rows[0].ruta_archivo}`
+      url_vista: rows[0].ruta_archivo.startsWith('http') ? rows[0].ruta_archivo : `/uploads/${rows[0].ruta_archivo}`
     };
     
     res.json(documento);
@@ -220,6 +193,38 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
+
+app.get('/api/descargar/:id', async (req, res) => {
+  try {
+    // Busca el documento en la base de datos
+    const [rows] = await pool.execute('SELECT * FROM documentos WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).send('Documento no encontrado');
+    }
+    const doc = rows[0];
+    // Si es local, sirve el archivo local
+    if (!doc.ruta_archivo.startsWith('http')) {
+      return res.sendFile(path.join(uploadDir, doc.ruta_archivo));
+    }
+    // Si es Google Drive, descarga y sirve el PDF
+    const fileId = extraerIdDeGoogleDrive(doc.ruta_archivo);
+    const driveRes = await drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'stream' }
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    driveRes.data.pipe(res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error al descargar el archivo');
+  }
+});
+
+function extraerIdDeGoogleDrive(url) {
+  // Extrae el ID del enlace de Google Drive
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
 
 // Iniciar el servidor
 app.listen(port, () => {

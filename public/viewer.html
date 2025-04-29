@@ -135,14 +135,18 @@
         
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
-            // Obtener parámetros de la URL
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const searchTerm = params.get('search');
-            const pageNumber = params.get('page');
-            
-            // Cargar el PDF (obtener de la URL actual sin parámetros)
-            const pdfUrl = window.location.href.split('#')[0];
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+            const searchTerm = urlParams.get('search');
+            const pageNumber = urlParams.get('page');
+
+            if (!id) {
+                alert('No se proporcionó el ID del documento');
+                return;
+            }
+
+            // Cargar el PDF desde el backend
+            const pdfUrl = `/api/descargar/${id}`;
             loadPdf(pdfUrl, searchTerm, pageNumber);
             
             // Event listeners
@@ -307,41 +311,45 @@
             searchMatches = [];
             currentMatchIndex = -1;
             
-            const searchPattern = new RegExp(searchText.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
+            const normalizedSearch = normalizeText(searchText);
             
-            // Mostrar spinner de carga
             const loading = showLoading();
             
             try {
-                // Buscar en cada página
                 for (let i = 1; i <= pdfDoc.numPages; i++) {
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
-                    const textItems = textContent.items;
-                    
-                    for (let j = 0; j < textItems.length; j++) {
-                        const textItem = textItems[j];
-                        const text = textItem.str;
-                        
-                        // Buscar coincidencias en este fragmento de texto
-                        let match;
-                        while ((match = searchPattern.exec(text)) !== null) {
-                            searchMatches.push({
-                                pageNum: i,
-                                textItem: textItem,
-                                matchIndex: match.index,
-                                matchText: match[0]
-                            });
+                    const items = textContent.items;
+
+                    // Normaliza todos los textItems
+                    const normalizedItems = items.map(item => normalizeText(item.str));
+
+                    // Busca la secuencia de textItems que forman la búsqueda
+                    for (let start = 0; start < normalizedItems.length; start++) {
+                        let combined = '';
+                        let end = start;
+                        while (end < normalizedItems.length && combined.length < normalizedSearch.length) {
+                            combined += normalizedItems[end];
+                            if (combined === normalizedSearch) {
+                                // Guarda todos los textItems de la coincidencia
+                                for (let k = start; k <= end; k++) {
+                                    searchMatches.push({
+                                        pageNum: i,
+                                        textItem: items[k]
+                                    });
+                                }
+                                break;
+                            }
+                            end++;
                         }
                     }
                 }
                 
                 hideLoading(loading);
                 
-                // Si se encontraron coincidencias, ir a la primera
                 if (searchMatches.length > 0) {
                     navigateToNextMatch();
-                    alert(`Se encontraron ${searchMatches.length} coincidencias`);
+                    alert(`Se encontraron coincidencias`);
                 } else {
                     alert('No se encontraron coincidencias');
                 }
@@ -384,7 +392,6 @@
             // Filtrar coincidencias para la página actual
             const pageMatches = searchMatches.filter(match => match.pageNum === pageNum);
             
-            // Resaltar cada coincidencia
             for (let i = 0; i < pageMatches.length; i++) {
                 const match = pageMatches[i];
                 const textItem = match.textItem;
@@ -393,11 +400,9 @@
                 const x = textItem.transform[4];
                 const y = textItem.transform[5];
                 const width = textItem.width;
-                const height = textItem.height || 15; // Altura aproximada si no está disponible
+                const height = textItem.height || 15;
                 
-                // Dibujar un rectángulo sobre el texto
-                const isCurrentMatch = searchMatches.indexOf(match) === currentMatchIndex;
-                ctx.fillStyle = isCurrentMatch ? 'rgba(255, 165, 0, 0.5)' : 'rgba(255, 255, 0, 0.3)';
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
                 ctx.fillRect(x, y - height + 2, width, height);
             }
             
@@ -433,6 +438,13 @@
             if (spinner && spinner.parentNode) {
                 spinner.parentNode.removeChild(spinner);
             }
+        }
+        
+        function normalizeText(text) {
+            return text
+                .replace(/n[º°o]/gi, 'no') // Convierte N°/Nº/No/N o en 'no'
+                .replace(/\s+/g, '')       // Elimina espacios
+                .toLowerCase();            // Minúsculas
         }
     </script>
 </body>
