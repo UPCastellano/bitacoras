@@ -14,7 +14,15 @@ const app = express();
 const port = config.server.port;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*', // Cambia esto por tu dominio en producción para mayor seguridad
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version',
+    'Content-Length', 'Content-MD5', 'Content-Type', 'Date', 'X-Api-Version'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
