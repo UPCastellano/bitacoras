@@ -3,6 +3,9 @@ let documentosTable;
 let allDocumentos = []; // Almacena todos los documentos disponibles
 let selectedDocId = null; // ID del documento seleccionado actualmente
 
+// Variables para la búsqueda avanzada
+let selectedAdvancedDoc = null;
+
 // Función para mostrar spinner de carga
 function showLoading() {
     const spinner = document.createElement('div');
@@ -288,6 +291,64 @@ function goToPage() {
     openPdfInNewTab(documentId, null, pageNumber);
 }
 
+// Buscar documentos por texto/código
+function searchDocuments() {
+    const query = document.getElementById('searchDocInput').value.trim().toLowerCase();
+    const resultsDiv = document.getElementById('searchResults');
+    const pageSection = document.getElementById('pageSearchSection');
+    resultsDiv.innerHTML = '';
+    pageSection.style.display = 'none';
+    selectedAdvancedDoc = null;
+    if (!query) return;
+    const results = allDocumentos.filter(doc =>
+        doc.nombre.toLowerCase().includes(query) ||
+        doc.descripcion.toLowerCase().includes(query) ||
+        (doc.codigo ? doc.codigo.toLowerCase().includes(query) : false) // si tienes campo codigo
+    );
+    if (results.length === 0) {
+        resultsDiv.innerHTML = '<div class="alert alert-warning">No se encontraron documentos.</div>';
+        return;
+    }
+    // Mostrar resultados
+    const list = document.createElement('ul');
+    list.className = 'list-group';
+    results.forEach(doc => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span><strong>${doc.nombre}</strong> <small class='text-muted'>${doc.descripcion || ''}</small></span>
+            <div>
+                <button class='btn btn-primary btn-sm me-2' onclick='selectAdvancedDoc(${doc.id})'>Seleccionar</button>
+                <a href="/api/descargar/${doc.id}" class="btn btn-success btn-sm" target="_blank" title="Descargar"><i class="fas fa-download"></i></a>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+    resultsDiv.appendChild(list);
+}
+
+// Seleccionar documento de la búsqueda avanzada
+window.selectAdvancedDoc = function(docId) {
+    selectedAdvancedDoc = allDocumentos.find(doc => doc.id == docId);
+    document.getElementById('pageSearchSection').style.display = 'block';
+    showMessage('success', `Documento seleccionado: ${selectedAdvancedDoc.nombre}`);
+}
+
+// Ir a una página específica del documento seleccionado
+function goToPageAdvanced() {
+    const pageNumber = document.getElementById('pageInput').value.trim();
+    if (!selectedAdvancedDoc) {
+        showMessage('warning', 'Seleccione un documento primero');
+        return;
+    }
+    if (!pageNumber || isNaN(pageNumber) || pageNumber < 1) {
+        showMessage('warning', 'Ingrese un número de página válido');
+        return;
+    }
+    // Abrir visor en la página indicada
+    openPdfInNewTab(selectedAdvancedDoc.id, null, pageNumber);
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
     // Inicializar DataTable
@@ -331,5 +392,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = e.target.closest('.delete-btn').getAttribute('data-id');
             deleteDocumento(id);
         }
+    });
+
+    // Listeners búsqueda avanzada
+    document.getElementById('searchDocBtn').addEventListener('click', searchDocuments);
+    document.getElementById('searchDocInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') searchDocuments();
+    });
+    document.getElementById('goToPageBtn').addEventListener('click', goToPageAdvanced);
+    document.getElementById('pageInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') goToPageAdvanced();
     });
 }); 

@@ -59,31 +59,17 @@
                         <h5 class="mb-0"><i class="fas fa-search me-2"></i>Búsqueda Avanzada</h5>
                     </div>
                     <div class="card-body">
-                        <!-- Selector de documento -->
-                        <div class="mb-3">
-                            <label for="documentSelect" class="form-label">Seleccionar documento</label>
-                            <select class="form-select" id="documentSelect">
-                                <option value="">-- Seleccione un documento --</option>
-                                <!-- Se cargará dinámicamente -->
-                            </select>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="searchDocInput" placeholder="Buscar por código, nombre o descripción...">
+                            <button class="btn btn-primary" id="searchDocBtn">
+                                <i class="fas fa-search"></i>
+                            </button>
                         </div>
-                        
-                        <!-- Búsqueda por número de serie -->
-                        <div class="mb-3">
-                            <label for="searchSerialInput" class="form-label">Buscar por número de serie</label>
+                        <div id="searchResults"></div>
+                        <div id="pageSearchSection" style="display:none;">
+                            <label for="pageInput" class="form-label">Ir a página</label>
                             <div class="input-group">
-                                <input type="text" class="form-control" id="searchSerialInput" placeholder="Ej: SN-12345">
-                                <button class="btn btn-primary" id="searchSerialBtn">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Navegación por página -->
-                        <div class="mb-3">
-                            <label for="pageNumberInput" class="form-label">Ir a página</label>
-                            <div class="input-group">
-                                <input type="number" min="1" class="form-control" id="pageNumberInput" placeholder="Número de página">
+                                <input type="number" min="1" class="form-control" id="pageInput" placeholder="Número de página">
                                 <button class="btn btn-primary" id="goToPageBtn">
                                     <i class="fas fa-arrow-right"></i>
                                 </button>
