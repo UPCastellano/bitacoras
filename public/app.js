@@ -122,6 +122,7 @@ function loadDocumentos() {
             documentosTable.rows.add(data).draw();
             
             // Actualizar el selector de documentos
+            console.log('Documentos para el selector:', allDocumentos);
             updateDocumentSelector();
             
             hideLoading(loading);
@@ -136,12 +137,11 @@ function loadDocumentos() {
 // Actualizar el selector de documentos
 function updateDocumentSelector() {
     const select = document.getElementById('documentSelect');
-    
+    const noDocsMsg = document.getElementById('noDocsMsg');
     // Limpiar opciones actuales excepto la primera
     while (select.options.length > 1) {
         select.remove(1);
     }
-    
     // Agregar nuevos documentos al selector
     allDocumentos.forEach(doc => {
         const option = document.createElement('option');
@@ -149,6 +149,13 @@ function updateDocumentSelector() {
         option.textContent = doc.nombre;
         select.appendChild(option);
     });
+    // Mostrar mensaje si no hay documentos
+    if (allDocumentos.length === 0) {
+        noDocsMsg.style.display = 'block';
+    } else {
+        noDocsMsg.style.display = 'none';
+    }
+    console.log('Opciones en el selector:', select.options.length);
 }
 
 // Manejar la subida de archivos
