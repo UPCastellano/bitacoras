@@ -15,7 +15,7 @@ const port = config.server.port;
 
 // Middleware
 app.use(cors({
-  origin: '*', // Cambia esto por tu dominio en producción para mayor seguridad
+  origin: '*', // O pon tu dominio en producción para mayor seguridad
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'X-CSRF-Token', 'X-Requested-With', 'Accept', 'Accept-Version',
@@ -159,6 +159,16 @@ app.delete('/api/documentos/:id', async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar documento:', error);
     res.status(500).json({ error: 'Error al eliminar el documento' });
+  }
+});
+
+// Endpoint de prueba de conexión a la base de datos
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT 1');
+    res.json({ ok: true, rows });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
