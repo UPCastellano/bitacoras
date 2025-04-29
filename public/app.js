@@ -1,5 +1,7 @@
 // Variables globales
 let documentosTable;
+let allDocumentos = []; // Almacena todos los documentos disponibles
+let selectedDocId = null; // ID del documento seleccionado actualmente
 
 // Función para mostrar spinner de carga
 function showLoading() {
@@ -81,9 +83,9 @@ function initDataTable() {
                 render: function(data) {
                     return `
                         <div class="d-flex justify-content-center">
-                            <button class="btn btn-primary btn-sm btn-action view-btn" data-id="${data.id}" data-url="${data.url_vista}" title="Ver PDF">
+                            <a href="${data.url_vista}" class="btn btn-primary btn-sm btn-action" target="_blank" title="Ver PDF">
                                 <i class="fas fa-eye"></i>
-                            </button>
+                            </a>
                             <a href="${data.url_vista}" class="btn btn-success btn-sm btn-action" download="${data.nombre}.pdf" title="Descargar">
                                 <i class="fas fa-download"></i>
                             </a>
@@ -110,9 +112,16 @@ function loadDocumentos() {
             return response.json();
         })
         .then(data => {
+            // Guardar todos los documentos
+            allDocumentos = data;
+            
             // Limpiar y volver a cargar la tabla
             documentosTable.clear();
             documentosTable.rows.add(data).draw();
+            
+            // Actualizar el selector de documentos
+            updateDocumentSelector();
+            
             hideLoading(loading);
         })
         .catch(error => {
@@ -120,6 +129,24 @@ function loadDocumentos() {
             showMessage('error', 'Error al cargar los documentos');
             hideLoading(loading);
         });
+}
+
+// Actualizar el selector de documentos
+function updateDocumentSelector() {
+    const select = document.getElementById('documentSelect');
+    
+    // Limpiar opciones actuales excepto la primera
+    while (select.options.length > 1) {
+        select.remove(1);
+    }
+    
+    // Agregar nuevos documentos al selector
+    allDocumentos.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = doc.nombre;
+        select.appendChild(option);
+    });
 }
 
 // Manejar la subida de archivos
@@ -192,16 +219,73 @@ function deleteDocumento(id) {
     });
 }
 
-// Ver documento PDF
-function viewDocument(url, nombre) {
-    // Configurar el modal
-    document.getElementById('pdfViewerModalLabel').textContent = nombre;
-    document.getElementById('pdfFrame').src = url;
-    document.getElementById('downloadBtn').href = url;
+// Abrir el PDF en una nueva pestaña con parámetros de búsqueda
+function openPdfInNewTab(documentId, searchTerm = null, pageNumber = null) {
+    // Buscar el documento
+    const documento = allDocumentos.find(doc => doc.id == documentId);
+    if (!documento) {
+        showMessage('error', 'Documento no encontrado');
+        return;
+    }
     
-    // Abrir el modal
-    const modal = new bootstrap.Modal(document.getElementById('pdfViewerModal'));
-    modal.show();
+    // Construir la URL base
+    let url = documento.url_vista;
+    
+    // Construir parámetros para la búsqueda
+    const params = new URLSearchParams();
+    if (searchTerm) {
+        params.append('search', searchTerm);
+    }
+    if (pageNumber) {
+        params.append('page', pageNumber);
+    }
+    
+    // Agregar parámetros a la URL si existen
+    const queryString = params.toString();
+    if (queryString) {
+        url = `${url}#${queryString}`;
+    }
+    
+    // Abrir en nueva pestaña
+    window.open(url, '_blank');
+}
+
+// Buscar por número de serie
+function searchBySerialNumber() {
+    const serialNumber = document.getElementById('searchSerialInput').value.trim();
+    const documentId = document.getElementById('documentSelect').value;
+    
+    if (!serialNumber) {
+        showMessage('warning', 'Ingrese un número de serie para buscar');
+        return;
+    }
+    
+    if (!documentId) {
+        showMessage('warning', 'Seleccione un documento para realizar la búsqueda');
+        return;
+    }
+    
+    // Abrir en nueva pestaña con el parámetro de búsqueda
+    openPdfInNewTab(documentId, serialNumber);
+}
+
+// Ir a una página específica
+function goToPage() {
+    const pageNumber = document.getElementById('pageNumberInput').value.trim();
+    const documentId = document.getElementById('documentSelect').value;
+    
+    if (!pageNumber || isNaN(pageNumber) || pageNumber < 1) {
+        showMessage('warning', 'Ingrese un número de página válido');
+        return;
+    }
+    
+    if (!documentId) {
+        showMessage('warning', 'Seleccione un documento para navegar');
+        return;
+    }
+    
+    // Abrir en nueva pestaña con el parámetro de página
+    openPdfInNewTab(documentId, null, pageNumber);
 }
 
 // Event Listeners
@@ -215,26 +299,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Manejar el formulario de subida
     document.getElementById('uploadForm').addEventListener('submit', handleFileUpload);
     
+    // Cambio en el selector de documentos
+    document.getElementById('documentSelect').addEventListener('change', function() {
+        selectedDocId = this.value;
+    });
+    
+    // Botón de búsqueda por número de serie
+    document.getElementById('searchSerialBtn').addEventListener('click', searchBySerialNumber);
+    
+    // Búsqueda por número de serie al presionar Enter
+    document.getElementById('searchSerialInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchBySerialNumber();
+        }
+    });
+    
+    // Botón para ir a una página específica
+    document.getElementById('goToPageBtn').addEventListener('click', goToPage);
+    
+    // Ir a página al presionar Enter
+    document.getElementById('pageNumberInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            goToPage();
+        }
+    });
+    
     // Delegación de eventos para botones de la tabla
     document.getElementById('documentosTable').addEventListener('click', function(e) {
-        // Botón de ver documento
-        if (e.target.closest('.view-btn')) {
-            const button = e.target.closest('.view-btn');
-            const url = button.getAttribute('data-url');
-            const id = button.getAttribute('data-id');
-            
-            // Obtener el nombre del documento a través de la API
-            fetch(`/api/documentos/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    viewDocument(url, data.nombre);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showMessage('error', 'Error al obtener información del documento');
-                });
-        }
-        
         // Botón de eliminar documento
         if (e.target.closest('.delete-btn')) {
             const id = e.target.closest('.delete-btn').getAttribute('data-id');

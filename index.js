@@ -166,6 +166,23 @@ app.delete('/api/documentos/:id', async (req, res) => {
   }
 });
 
+// Ruta para la visualización de PDF en nueva pestaña
+app.get('/uploads/:archivo', (req, res) => {
+    const archivo = req.params.archivo;
+    const filepath = path.join(uploadDir, archivo);
+    
+    // Verificar si la URL contiene parámetros de búsqueda o página
+    const hasSearchParams = req.query.search || req.query.page;
+    
+    // Si hay parámetros o el cliente pide HTML (por ejemplo, un navegador), enviar el visor
+    if (hasSearchParams || (req.headers.accept && req.headers.accept.includes('text/html'))) {
+        res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
+    } else {
+        // Si no hay parámetros, enviar el archivo PDF directamente
+        res.sendFile(filepath);
+    }
+});
+
 // Ruta de la página principal
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
