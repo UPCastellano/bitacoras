@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 require('dotenv').config();
@@ -25,14 +24,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
-app.use('/uploads', express.static(path.join(__dirname, config.upload.path)));
-
-// Asegurarse de que el directorio de subidas exista
-const uploadDir = path.join(__dirname, config.upload.path);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// app.use('/uploads', express.static(path.join(__dirname, config.upload.path)));
 
 // Multer en memoria (no en disco)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -172,29 +164,6 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
-// Ruta para la visualización de PDF en nueva pestaña
-app.get('/uploads/:archivo', (req, res) => {
-    const archivo = req.params.archivo;
-    const filepath = path.join(uploadDir, archivo);
-    
-    // Verificar si la URL contiene parámetros de búsqueda o página
-    const hasSearchParams = req.query.search || req.query.page;
-    
-    // Verificar si el archivo existe
-    if (!fs.existsSync(filepath)) {
-        console.error(`Archivo no encontrado: ${filepath}`);
-        return res.status(404).send('Archivo no encontrado');
-    }
-    
-    // Si hay parámetros o el cliente pide HTML (por ejemplo, un navegador), enviar el visor
-    if (hasSearchParams || (req.headers.accept && req.headers.accept.includes('text/html'))) {
-        res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
-    } else {
-        // Si no hay parámetros, enviar el archivo PDF directamente
-        res.sendFile(filepath);
-    }
-});
-
 // Ruta de la página principal
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -214,24 +183,24 @@ app.use((err, req, res, next) => {
 
 app.get('/api/descargar/:id', async (req, res) => {
   try {
-    // Busca el documento en la base de datos
     const [rows] = await pool.execute('SELECT * FROM documentos WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).send('Documento no encontrado');
     }
     const doc = rows[0];
-    // Si es local, sirve el archivo local
-    if (!doc.ruta_archivo.startsWith('http')) {
-      return res.sendFile(path.join(uploadDir, doc.ruta_archivo));
+    // Solo Google Drive
+    if (doc.ruta_archivo.startsWith('http')) {
+      const fileId = extraerIdDeGoogleDrive(doc.ruta_archivo);
+      const driveRes = await drive.files.get(
+        { fileId, alt: 'media' },
+        { responseType: 'stream' }
+      );
+      res.setHeader('Content-Type', 'application/pdf');
+      driveRes.data.pipe(res);
+    } else {
+      // Si tienes archivos locales antiguos, puedes mostrar un mensaje de error
+      res.status(404).send('El archivo solo está disponible en Google Drive');
     }
-    // Si es Google Drive, descarga y sirve el PDF
-    const fileId = extraerIdDeGoogleDrive(doc.ruta_archivo);
-    const driveRes = await drive.files.get(
-      { fileId, alt: 'media' },
-      { responseType: 'stream' }
-    );
-    res.setHeader('Content-Type', 'application/pdf');
-    driveRes.data.pipe(res);
   } catch (err) {
     console.error(err);
     res.status(500).send('Error al descargar el archivo');
