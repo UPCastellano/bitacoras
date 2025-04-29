@@ -64,40 +64,55 @@ const pool = mysql.createPool({
 
 // Rutas
 // 1. Subir archivo PDF
-app.post('/api/upload', upload.single('archivo'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se ha subido ningún archivo PDF' });
-    }
+app.post('/api/upload', (req, res) => {
+    // Usar multer como middleware de forma manual para manejar mejor los errores
+    upload.single('archivo')(req, res, async function(err) {
+        if (err) {
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(413).json({ 
+                        error: 'El archivo excede el tamaño máximo permitido de 50MB' 
+                    });
+                }
+                return res.status(400).json({ error: `Error en la subida: ${err.message}` });
+            }
+            return res.status(500).json({ error: `Error en el servidor: ${err.message}` });
+        }
+        
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'No se ha subido ningún archivo PDF' });
+            }
 
-    const { nombre, descripcion } = req.body;
-    const archivo = req.file;
+            const { nombre, descripcion } = req.body;
+            const archivo = req.file;
 
-    // Guardar la información en la base de datos
-    const [result] = await pool.execute(
-      'INSERT INTO documentos (nombre, descripcion, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?)',
-      [
-        nombre || archivo.originalname,
-        descripcion || '',
-        archivo.filename,
-        archivo.mimetype,
-        archivo.size
-      ]
-    );
+            // Guardar la información en la base de datos
+            const [result] = await pool.execute(
+                'INSERT INTO documentos (nombre, descripcion, ruta_archivo, tipo_mime, tamano) VALUES (?, ?, ?, ?, ?)',
+                [
+                    nombre || archivo.originalname,
+                    descripcion || '',
+                    archivo.filename,
+                    archivo.mimetype,
+                    archivo.size
+                ]
+            );
 
-    res.json({
-      success: true,
-      mensaje: 'Archivo subido correctamente',
-      documento: {
-        id: result.insertId,
-        nombre: nombre || archivo.originalname,
-        ruta_archivo: archivo.filename
-      }
+            res.json({
+                success: true,
+                mensaje: 'Archivo subido correctamente',
+                documento: {
+                    id: result.insertId,
+                    nombre: nombre || archivo.originalname,
+                    ruta_archivo: archivo.filename
+                }
+            });
+        } catch (error) {
+            console.error('Error al subir el archivo:', error);
+            res.status(500).json({ error: 'Error al procesar la subida del archivo' });
+        }
     });
-  } catch (error) {
-    console.error('Error al subir el archivo:', error);
-    res.status(500).json({ error: 'Error al procesar la subida del archivo' });
-  }
 });
 
 // 2. Obtener todos los documentos
@@ -173,6 +188,12 @@ app.get('/uploads/:archivo', (req, res) => {
     
     // Verificar si la URL contiene parámetros de búsqueda o página
     const hasSearchParams = req.query.search || req.query.page;
+    
+    // Verificar si el archivo existe
+    if (!fs.existsSync(filepath)) {
+        console.error(`Archivo no encontrado: ${filepath}`);
+        return res.status(404).send('Archivo no encontrado');
+    }
     
     // Si hay parámetros o el cliente pide HTML (por ejemplo, un navegador), enviar el visor
     if (hasSearchParams || (req.headers.accept && req.headers.accept.includes('text/html'))) {

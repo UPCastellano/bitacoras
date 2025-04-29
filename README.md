@@ -9,6 +9,8 @@ Sistema para subir, visualizar y gestionar archivos PDF utilizando Node.js, Expr
 - Enlaces para visualizar, descargar y eliminar archivos
 - Interfaz responsiva y moderna
 - Validación y restricción de archivos (solo PDF)
+- Búsqueda de número de serie en documentos
+- Navegación por página específica
 
 ## Requisitos
 
@@ -59,11 +61,44 @@ npm start
 ### Ver y gestionar documentos
 
 - La tabla muestra todos los documentos subidos
-- Utiliza el botón de "Ver" para visualizar el PDF en un modal
+- Utiliza el botón de "Ver" para visualizar el PDF en una nueva pestaña
 - Utiliza el botón de "Descargar" para guardar el PDF
 - Utiliza el botón de "Eliminar" para borrar el documento
 
+### Búsqueda avanzada
+
+1. Selecciona un documento en el desplegable
+2. Para buscar un número de serie:
+   - Introduce el texto en el campo "Buscar por número de serie"
+   - Haz clic en el botón de búsqueda o presiona Enter
+3. Para ir a una página específica:
+   - Introduce el número de página en el campo "Ir a página"
+   - Haz clic en el botón o presiona Enter
+
 ## Despliegue en Vercel
+
+### Limitaciones de Vercel
+
+Vercel tiene algunas limitaciones importantes para este tipo de aplicación:
+
+1. **Tamaño máximo de carga**: Por defecto, Vercel limita las cargas a 4.5MB. Nuestra configuración lo aumenta a 50MB.
+2. **Almacenamiento temporal**: Vercel utiliza un sistema de archivos efímero, lo que significa que los archivos subidos desaparecerán después de cada despliegue o reinicio.
+
+### Configuración para producción
+
+Para un entorno de producción robusto, considera estas opciones:
+
+1. **Base de datos**: Usa un servicio de base de datos gestionado como:
+   - PlanetScale (MySQL compatible)
+   - Neon (PostgreSQL)
+   - Clever Cloud MySQL
+
+2. **Almacenamiento de archivos**: Utiliza un servicio de almacenamiento en la nube:
+   - Amazon S3
+   - Google Cloud Storage
+   - Cloudinary (especializado en archivos multimedia)
+
+### Pasos para desplegar en Vercel
 
 1. Asegúrate de tener una cuenta en Vercel y la CLI instalada:
 ```bash
@@ -75,17 +110,17 @@ npm install -g vercel
    - Ve a "Settings" > "Environment Variables"
    - Añade las variables de entorno necesarias (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME)
 
-3. Despliega tu aplicación:
+3. Si estás utilizando un servicio externo de almacenamiento, modifica el código para usarlo.
+
+4. Despliega tu aplicación:
 ```bash
 vercel
 ```
 
-4. Para desplegar a producción:
+5. Para desplegar a producción:
 ```bash
 vercel --prod
 ```
-
-**Nota importante**: Para el almacenamiento de archivos en producción, considera usar un servicio de almacenamiento como AWS S3 o similar, ya que Vercel no garantiza persistencia de archivos.
 
 ## Scripts de base de datos
 

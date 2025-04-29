@@ -162,7 +162,10 @@ function handleFileUpload(event) {
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(data => {
+            return response.json().catch(() => {
+                // Si no se puede parsear como JSON, crear un objeto de error genérico
+                throw new Error('Error al subir el archivo. Comprueba el tamaño máximo permitido (50MB).');
+            }).then(data => {
                 throw new Error(data.error || 'Error al subir el archivo');
             });
         }
