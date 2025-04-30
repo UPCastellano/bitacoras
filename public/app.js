@@ -239,17 +239,16 @@ function openPdfInNewTab(documentId, searchTerm = null, pageNumber = null) {
     const documento = allDocumentos.find(doc => doc.id == documentId);
     if (!documento) {
         showMessage('error', 'Documento no encontrado');
+        console.error('Documento no encontrado:', documentId);
         return;
     }
-
-    // Construir la URL del visor personalizado
     let url = `/viewer.html?id=${documentId}`;
     const params = new URLSearchParams();
     if (searchTerm) params.append('search', searchTerm);
     if (pageNumber) params.append('page', pageNumber);
     const queryString = params.toString();
     if (queryString) url += `&${queryString}`;
-
+    console.log('Abriendo visor con URL:', url);
     window.open(url, '_blank');
 }
 
@@ -299,14 +298,17 @@ function searchDocuments() {
     resultsDiv.innerHTML = '';
     pageSection.style.display = 'none';
     selectedAdvancedDoc = null;
-    if (!query) return;
+    if (!query) {
+        resultsDiv.innerHTML = '<div class="alert alert-warning">Ingrese un texto para buscar.</div>';
+        return;
+    }
     const results = allDocumentos.filter(doc =>
         doc.nombre.toLowerCase().includes(query) ||
         doc.descripcion.toLowerCase().includes(query) ||
-        (doc.codigo ? doc.codigo.toLowerCase().includes(query) : false) // si tienes campo codigo
+        (doc.codigo ? doc.codigo.toLowerCase().includes(query) : false)
     );
     if (results.length === 0) {
-        resultsDiv.innerHTML = '<div class="alert alert-warning">No se encontraron documentos.</div>';
+        resultsDiv.innerHTML = '<div class="alert alert-danger">No se encontraron documentos.</div>';
         return;
     }
     // Mostrar resultados
@@ -319,6 +321,7 @@ function searchDocuments() {
             <span><strong>${doc.nombre}</strong> <small class='text-muted'>${doc.descripcion || ''}</small></span>
             <div>
                 <button class='btn btn-primary btn-sm me-2' onclick='selectAdvancedDoc(${doc.id})'>Seleccionar</button>
+                <button class='btn btn-outline-success btn-sm' onclick='openPdfInNewTab(${doc.id})' title='Ver en visor' target='_blank'><i class='fas fa-eye'></i></button>
                 <a href="/api/descargar/${doc.id}" class="btn btn-success btn-sm" target="_blank" title="Descargar"><i class="fas fa-download"></i></a>
             </div>
         `;
@@ -339,13 +342,15 @@ function goToPageAdvanced() {
     const pageNumber = document.getElementById('pageInput').value.trim();
     if (!selectedAdvancedDoc) {
         showMessage('warning', 'Seleccione un documento primero');
+        console.warn('Intento de ir a página sin documento seleccionado');
         return;
     }
     if (!pageNumber || isNaN(pageNumber) || pageNumber < 1) {
         showMessage('warning', 'Ingrese un número de página válido');
+        console.warn('Número de página inválido:', pageNumber);
         return;
     }
-    // Abrir visor en la página indicada
+    // Siempre abrir en nueva pestaña
     openPdfInNewTab(selectedAdvancedDoc.id, null, pageNumber);
 }
 

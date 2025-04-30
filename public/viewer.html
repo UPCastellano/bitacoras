@@ -109,7 +109,11 @@
                         <button class="btn btn-primary" id="searchBtn">
                             <i class="fas fa-search"></i>
                         </button>
+                        <button class="btn btn-secondary" id="prevMatchBtn" title="Coincidencia anterior"><i class="fas fa-arrow-up"></i></button>
+                        <button class="btn btn-secondary" id="nextMatchBtn" title="Coincidencia siguiente"><i class="fas fa-arrow-down"></i></button>
+                        <button class="btn btn-outline-dark" id="backToSearchBtn" title="Volver a búsqueda avanzada"><i class="fas fa-arrow-left"></i></button>
                     </div>
+                    <div id="matchInfo" class="text-end small mt-1"></div>
                 </div>
             </div>
         </div>
@@ -149,11 +153,13 @@
 
             if (!id) {
                 alert('No se proporcionó el ID del documento');
+                console.error('No se proporcionó el ID del documento en la URL');
                 return;
             }
 
             // Cargar el PDF desde el backend
             const pdfUrl = `/api/descargar/${id}`;
+            console.log('Cargando PDF desde:', pdfUrl, 'con search:', searchTerm, 'y page:', pageNumber);
             loadPdf(pdfUrl, searchTerm, pageNumber);
             
             // Event listeners
@@ -174,6 +180,11 @@
                 if (e.key === 'Enter') {
                     goToPageFromInput();
                 }
+            });
+            document.getElementById('nextMatchBtn').addEventListener('click', navigateToNextMatch);
+            document.getElementById('prevMatchBtn').addEventListener('click', navigateToPrevMatch);
+            document.getElementById('backToSearchBtn').addEventListener('click', function() {
+                window.close(); // Cierra la pestaña del visor
             });
         });
         
@@ -210,7 +221,7 @@
             }).catch(error => {
                 hideLoading(loading);
                 console.error('Error al cargar el PDF:', error);
-                alert('Error al cargar el documento PDF');
+                alert('Error al cargar el documento PDF. Verifica que el archivo esté disponible y que tengas permisos.');
             });
         }
         
@@ -293,12 +304,11 @@
         function goToPageFromInput() {
             const input = document.getElementById('pageInput');
             const pageNumber = parseInt(input.value);
-            
             if (isNaN(pageNumber) || pageNumber < 1 || pageNumber > pdfDoc.numPages) {
                 alert(`Por favor, ingrese un número de página válido (1-${pdfDoc.numPages})`);
+                console.warn('Número de página inválido:', pageNumber);
                 return;
             }
-            
             pageNum = pageNumber;
             queueRenderPage(pageNum);
         }
@@ -314,31 +324,22 @@
         // Buscar texto en el PDF
         async function searchInPdf(searchText) {
             if (!pdfDoc || !searchText) return;
-            
             searchMatches = [];
             currentMatchIndex = -1;
-            
             const normalizedSearch = normalizeText(searchText);
-            
             const loading = showLoading();
-            
             try {
                 for (let i = 1; i <= pdfDoc.numPages; i++) {
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
                     const items = textContent.items;
-
-                    // Normaliza todos los textItems
                     const normalizedItems = items.map(item => normalizeText(item.str));
-
-                    // Busca la secuencia de textItems que forman la búsqueda
                     for (let start = 0; start < normalizedItems.length; start++) {
                         let combined = '';
                         let end = start;
                         while (end < normalizedItems.length && combined.length < normalizedSearch.length) {
                             combined += normalizedItems[end];
                             if (combined === normalizedSearch) {
-                                // Guarda todos los textItems de la coincidencia
                                 for (let k = start; k <= end; k++) {
                                     searchMatches.push({
                                         pageNum: i,
@@ -351,35 +352,46 @@
                         }
                     }
                 }
-                
                 hideLoading(loading);
-                
                 if (searchMatches.length > 0) {
                     navigateToNextMatch();
                     alert(`Se encontraron coincidencias`);
+                    console.log('Coincidencias encontradas:', searchMatches);
                 } else {
                     alert('No se encontraron coincidencias');
+                    console.warn('No se encontraron coincidencias para:', searchText);
                 }
             } catch (error) {
                 hideLoading(loading);
                 console.error('Error en la búsqueda:', error);
-                alert('Error al realizar la búsqueda');
+                alert('Error al realizar la búsqueda. Puede que el PDF no tenga texto seleccionable.');
             }
         }
         
         // Navegar a la siguiente coincidencia
         function navigateToNextMatch() {
             if (searchMatches.length === 0) return;
-            
             currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
-            const match = searchMatches[currentMatchIndex];
-            
-            // Ir a la página de la coincidencia
+            updateMatchInfo();
+            goToMatch(currentMatchIndex);
+        }
+        
+        // Navegar a la coincidencia anterior
+        function navigateToPrevMatch() {
+            if (searchMatches.length === 0) return;
+            currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+            updateMatchInfo();
+            goToMatch(currentMatchIndex);
+        }
+        
+        // Ir a una coincidencia específica
+        function goToMatch(idx) {
+            const match = searchMatches[idx];
+            if (!match) return;
             if (pageNum !== match.pageNum) {
                 pageNum = match.pageNum;
                 queueRenderPage(pageNum);
             } else {
-                // Si ya estamos en la página correcta, solo resaltar
                 pdfDoc.getPage(pageNum).then(page => {
                     const viewport = page.getViewport({ scale });
                     const canvasId = `page-${pageNum}`;
@@ -392,36 +404,39 @@
             }
         }
         
-        // Resaltar coincidencias en la página
+        // Actualizar información de coincidencias
+        function updateMatchInfo() {
+            const info = document.getElementById('matchInfo');
+            if (searchMatches.length === 0) {
+                info.textContent = '';
+            } else {
+                info.textContent = `Coincidencia ${currentMatchIndex + 1} de ${searchMatches.length}`;
+            }
+        }
+        
+        // Modificar highlightMatches para resaltar la coincidencia actual
         async function highlightMatches(page, ctx, viewport) {
             if (!ctx || searchMatches.length === 0) return;
-            
-            // Filtrar coincidencias para la página actual
             const pageMatches = searchMatches.filter(match => match.pageNum === pageNum);
-            
             for (let i = 0; i < pageMatches.length; i++) {
                 const match = pageMatches[i];
                 const textItem = match.textItem;
-                
-                // Obtener las coordenadas aproximadas del texto
                 const x = textItem.transform[4];
                 const y = textItem.transform[5];
                 const width = textItem.width;
                 const height = textItem.height || 15;
-                
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                if (searchMatches[currentMatchIndex] && match === searchMatches[currentMatchIndex]) {
+                    ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; // Naranja para la actual
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.5)'; // Amarillo para las demás
+                }
                 ctx.fillRect(x, y - height + 2, width, height);
             }
-            
-            // Si la coincidencia actual está en esta página, desplazar la vista
+            // Scroll a la coincidencia actual
             if (currentMatchIndex >= 0 && searchMatches[currentMatchIndex].pageNum === pageNum) {
                 const match = searchMatches[currentMatchIndex];
                 const textItem = match.textItem;
-                
-                // Obtener posición aproximada
                 const y = textItem.transform[5];
-                
-                // Desplazar la vista al área de la coincidencia
                 setTimeout(() => {
                     document.getElementById('pdfContainer').scrollTo({
                         top: y - 100,
