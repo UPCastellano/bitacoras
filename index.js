@@ -201,10 +201,14 @@ app.get('/api/descargar/:id', async (req, res) => {
           { fileId, alt: 'media' },
           { responseType: 'stream' }
         );
+        console.log('Respuesta de Google Drive recibida, enviando PDF al cliente.');
         res.setHeader('Content-Type', 'application/pdf');
         driveRes.data.pipe(res);
       } catch (err) {
         console.error('Error de Google Drive:', err.errors || err.message || err);
+        if (err.errors) {
+          console.error('Detalles del error de Google Drive:', JSON.stringify(err.errors, null, 2));
+        }
         return res.status(500).send('Error al descargar el archivo desde Google Drive. Revisa el ID, permisos o existencia del archivo.');
       }
     } else {

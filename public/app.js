@@ -141,6 +141,7 @@ function loadDocumentos() {
 function updateDocumentSelector() {
     const select = document.getElementById('documentSelect');
     const noDocsMsg = document.getElementById('noDocsMsg');
+    if (!select) return;
     // Limpiar opciones actuales excepto la primera
     while (select.options.length > 1) {
         select.remove(1);
@@ -153,10 +154,12 @@ function updateDocumentSelector() {
         select.appendChild(option);
     });
     // Mostrar mensaje si no hay documentos
-    if (allDocumentos.length === 0) {
-        noDocsMsg.style.display = 'block';
-    } else {
-        noDocsMsg.style.display = 'none';
+    if (noDocsMsg) {
+        if (allDocumentos.length === 0) {
+            noDocsMsg.style.display = 'block';
+        } else {
+            noDocsMsg.style.display = 'none';
+        }
     }
     console.log('Opciones en el selector:', select.options.length);
 }
@@ -400,12 +403,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Listeners búsqueda avanzada
-    document.getElementById('searchDocBtn').addEventListener('click', searchDocuments);
-    document.getElementById('searchDocInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') searchDocuments();
-    });
-    document.getElementById('goToPageBtn').addEventListener('click', goToPageAdvanced);
-    document.getElementById('pageInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') goToPageAdvanced();
-    });
+    const btnSearchDoc = document.getElementById('searchDocBtn');
+    if (btnSearchDoc) btnSearchDoc.addEventListener('click', searchDocuments);
+    const inputSearchDoc = document.getElementById('searchDocInput');
+    if (inputSearchDoc) inputSearchDoc.addEventListener('keypress', function(e) { if (e.key === 'Enter') searchDocuments(); });
+    const btnGoToPage = document.getElementById('goToPageBtn');
+    if (btnGoToPage) btnGoToPage.addEventListener('click', goToPageAdvanced);
+    const inputPage = document.getElementById('pageInput');
+    if (inputPage) inputPage.addEventListener('keypress', function(e) { if (e.key === 'Enter') goToPageAdvanced(); });
 }); 
