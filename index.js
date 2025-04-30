@@ -191,14 +191,23 @@ app.get('/api/descargar/:id', async (req, res) => {
     // Solo Google Drive
     if (doc.ruta_archivo.startsWith('http')) {
       const fileId = extraerIdDeGoogleDrive(doc.ruta_archivo);
-      const driveRes = await drive.files.get(
-        { fileId, alt: 'media' },
-        { responseType: 'stream' }
-      );
-      res.setHeader('Content-Type', 'application/pdf');
-      driveRes.data.pipe(res);
+      console.log('Descargando de Google Drive:', doc.ruta_archivo);
+      console.log('ID extraído:', fileId);
+      if (!fileId) {
+        return res.status(400).send('No se pudo extraer el ID de Google Drive. Verifica el enlace.');
+      }
+      try {
+        const driveRes = await drive.files.get(
+          { fileId, alt: 'media' },
+          { responseType: 'stream' }
+        );
+        res.setHeader('Content-Type', 'application/pdf');
+        driveRes.data.pipe(res);
+      } catch (err) {
+        console.error('Error de Google Drive:', err.errors || err.message || err);
+        return res.status(500).send('Error al descargar el archivo desde Google Drive. Revisa el ID, permisos o existencia del archivo.');
+      }
     } else {
-      // Si tienes archivos locales antiguos, puedes mostrar un mensaje de error
       res.status(404).send('El archivo solo está disponible en Google Drive');
     }
   } catch (err) {
@@ -208,9 +217,15 @@ app.get('/api/descargar/:id', async (req, res) => {
 });
 
 function extraerIdDeGoogleDrive(url) {
-  // Extrae el ID del enlace de Google Drive
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
+  // Soporta varios formatos de enlace de Google Drive
+  // 1. https://drive.google.com/file/d/ID/view?usp=sharing
+  // 2. https://drive.google.com/open?id=ID
+  // 3. https://drive.google.com/uc?id=ID&export=download
+  let match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  return null;
 }
 
 // Iniciar el servidor
